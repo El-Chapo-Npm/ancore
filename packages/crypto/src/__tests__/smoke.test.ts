@@ -2,14 +2,12 @@ import * as CryptoAPI from '../index';
 
 const EXPECTED_EXPORTS = [
   'CRYPTO_VERSION',
-  'DEFAULT_ENTROPY_THRESHOLD',
-  'STRICT_ENTROPY_THRESHOLD',
-  'estimateEntropy',
-  'scoreEntropy',
-  'estimateCrackTime',
-  'analyzeEntropy',
-  'meetsEntropyThreshold',
-  'meetsStrictEntropyThreshold',
+  'toHex',
+  'fromHex',
+  'toBase64',
+  'fromBase64',
+  'encodeSignature',
+  'decodeSignature',
   'validatePasswordStrength',
   'encryptSecretKey',
   'decryptSecretKey',
@@ -19,9 +17,8 @@ const EXPECTED_EXPORTS = [
   'UnsupportedMnemonicLanguageError',
   'SUPPORTED_MNEMONIC_LANGUAGE',
   'deriveKeypairFromMnemonic',
-  'randomBytes',
-  'toBase58',
-  'fromBase58',
+  'signTransaction',
+  'verifySignature',
 ] as const;
 
 describe('@ancore/crypto smoke test', () => {

@@ -17,16 +17,39 @@ export {
   type EntropyScore,
 } from './entropy';
 
-export { validatePasswordStrength } from './password';
-export { encryptSecretKey, decryptSecretKey, UnsupportedVersionError, InvalidPayloadError } from './encryption';
-export type { EncryptedSecretKeyPayload } from './encryption';
+// Signature Format Helpers
+/**
+ * Centralized signature format helpers for hex/base64/raw conversions
+ * @example
+ * ```typescript
+ * // Convert bytes to hex
+ * const hex = toHex(sigBytes);
+ *
+ * // Auto-detect and decode any format
+ * const raw = decodeSignature('0xdeadbeef');
+ * ```
+ */
 export {
-  generateMnemonic,
-  validateMnemonic,
-  assertEnglishMnemonic,
-  UnsupportedMnemonicLanguageError,
-  SUPPORTED_MNEMONIC_LANGUAGE,
-} from './mnemonic';
+  toHex,
+  fromHex,
+  toBase64,
+  fromBase64,
+  encodeSignature,
+  decodeSignature,
+} from './signature-format';
+
+// Password Management
+export { validatePasswordStrength } from './password';
+
+// Encryption
+export { encryptSecretKey, decryptSecretKey } from './encryption';
+export type { EncryptedSecretKeyPayload } from './encryption';
+
+// Mnemonics
+export { generateMnemonic, validateMnemonic } from './mnemonic';
+
+// Key Derivation
 export { deriveKeypairFromMnemonic } from './key-derivation';
-export { randomBytes } from './random';
-export { toBase58, fromBase58 } from './encoding';
+
+// Signing & Verification
+export { signTransaction, verifySignature } from './signing';
