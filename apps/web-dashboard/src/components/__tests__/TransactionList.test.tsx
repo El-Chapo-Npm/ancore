@@ -37,6 +37,11 @@ describe('TransactionList', () => {
     return render(ui, { wrapper: TableDensityProvider, ...options });
   };
 
+  const getTransactionRows = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('[class*="border-b"]')).filter(
+      (row) => row.querySelector('button') === null
+    );
+
   it('renders transaction list', () => {
     renderWithProvider(<TransactionList transactions={mockTransactions} />);
     expect(screen.getByText('Recent Transactions')).toBeInTheDocument();
@@ -62,7 +67,7 @@ describe('TransactionList', () => {
     );
 
     // Optimistic transaction should appear first (before confirmed ones)
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     expect(rows.length).toBeGreaterThan(0);
 
     // Check that optimistic badge is shown
@@ -96,9 +101,7 @@ describe('TransactionList', () => {
   it('shows confirmed badge for regular transactions', () => {
     renderWithProvider(<TransactionList transactions={mockTransactions} />);
 
-    // Count confirmed badges (should be 2)
-    const confirmBadges = screen.getAllByText('confirmed');
-    expect(confirmBadges.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('confirmed')).toHaveLength(2);
   });
 
   it('handles optimistic transaction rollback', () => {
@@ -199,7 +202,7 @@ describe('TransactionList', () => {
   });
 
   it('renders sortable headers when transactions exist', () => {
-    render(<TransactionList transactions={mockTransactions} />);
+    renderWithProvider(<TransactionList transactions={mockTransactions} />);
     
     expect(screen.getByText('Date')).toBeInTheDocument();
     expect(screen.getByText('Amount')).toBeInTheDocument();
@@ -207,7 +210,7 @@ describe('TransactionList', () => {
   });
 
   it('does not render sortable headers when no transactions', () => {
-    render(<TransactionList transactions={[]} />);
+    renderWithProvider(<TransactionList transactions={[]} />);
     
     expect(screen.queryByText('Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Amount')).not.toBeInTheDocument();
@@ -242,11 +245,11 @@ describe('TransactionList', () => {
       },
     ];
 
-    const { container } = render(
+    const { container } = renderWithProvider(
       <TransactionList transactions={dateSortedTransactions} pageSize={10} />
     );
 
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     const firstRowDate = rows[0].textContent;
     const lastRowDate = rows[rows.length - 1].textContent;
 
@@ -283,7 +286,7 @@ describe('TransactionList', () => {
       },
     ];
 
-    const { container } = render(
+    const { container } = renderWithProvider(
       <TransactionList transactions={amountSortedTransactions} pageSize={10} />
     );
 
@@ -291,7 +294,7 @@ describe('TransactionList', () => {
     fireEvent.click(screen.getByText('Amount'));
     fireEvent.click(screen.getByText('Amount'));
 
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     const firstRowAmount = rows[0].textContent;
     const lastRowAmount = rows[rows.length - 1].textContent;
 
@@ -328,14 +331,14 @@ describe('TransactionList', () => {
       },
     ];
 
-    const { container } = render(
+    const { container } = renderWithProvider(
       <TransactionList transactions={statusSortedTransactions} pageSize={10} />
     );
 
-    // Click Status header to sort
+    fireEvent.click(screen.getByText('Status'));
     fireEvent.click(screen.getByText('Status'));
 
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     const firstRowStatus = rows[0].textContent;
     const lastRowStatus = rows[rows.length - 1].textContent;
 
@@ -345,19 +348,16 @@ describe('TransactionList', () => {
   });
 
   it('toggles sort direction when clicking same header', () => {
-    const { container } = render(
+    const { container } = renderWithProvider(
       <TransactionList transactions={mockTransactions} pageSize={10} />
     );
 
-    // Click Date header twice to toggle from desc to asc
-    fireEvent.click(screen.getByText('Date'));
     fireEvent.click(screen.getByText('Date'));
 
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     const firstRowDate = rows[0].textContent;
     const lastRowDate = rows[rows.length - 1].textContent;
 
-    // Oldest date should appear first (ascending order after toggle)
     expect(firstRowDate).toContain('1/1/2024');
     expect(lastRowDate).toContain('1/2/2024');
   });
@@ -372,7 +372,7 @@ describe('TransactionList', () => {
       counterparty: `GRECIPIENT${i}`,
     }));
 
-    const { container } = render(
+    const { container } = renderWithProvider(
       <TransactionList transactions={manyTransactions} pageSize={5} />
     );
 
@@ -383,7 +383,7 @@ describe('TransactionList', () => {
     // Navigate to next page
     fireEvent.click(screen.getByText('Next'));
 
-    const rows = container.querySelectorAll('[class*="border-b"]');
+    const rows = getTransactionRows(container);
     const firstRowAmount = rows[0].textContent;
 
     // First transaction on second page should have amount 60 (sorted ascending)
@@ -391,7 +391,7 @@ describe('TransactionList', () => {
   });
 
   it('shows sort indicator for active sort field', () => {
-    const { container } = render(<TransactionList transactions={mockTransactions} />);
+    const { container } = renderWithProvider(<TransactionList transactions={mockTransactions} />);
     
     // Date should be the default sort field with indicator
     const dateButton = screen.getByText('Date').closest('button');

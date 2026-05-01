@@ -321,6 +321,8 @@ export class SecureStorageManager {
       // Data corrupted
       return { keys: {} };
     }
+  }
+
   public async saveRecentRecipients(data: RecentRecipientsData): Promise<void> {
     if (!this.encryptionKey) {
       throw new Error('Storage manager is locked');

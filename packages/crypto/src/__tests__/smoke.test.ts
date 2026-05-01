@@ -11,6 +11,8 @@ const EXPECTED_EXPORTS = [
   'validatePasswordStrength',
   'encryptSecretKey',
   'decryptSecretKey',
+  'UnsupportedVersionError',
+  'InvalidPayloadError',
   'generateMnemonic',
   'validateMnemonic',
   'assertEnglishMnemonic',

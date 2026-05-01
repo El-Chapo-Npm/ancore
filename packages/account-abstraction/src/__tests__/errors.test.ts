@@ -225,25 +225,25 @@ describe('CONTRACT_ERROR_CODES', () => {
         {
           "code": 1,
           "errorCode": "ALREADY_INITIALIZED",
-          "message": "Account already initialized",
+          "message": "Account contract is already initialized",
           "name": "AlreadyInitializedError",
         },
         {
           "code": 2,
           "errorCode": "NOT_INITIALIZED",
-          "message": "Account not initialized",
+          "message": "Account contract is not initialized",
           "name": "NotInitializedError",
         },
         {
           "code": 3,
           "errorCode": "UNAUTHORIZED",
-          "message": "Unauthorized",
+          "message": "Caller is not authorized",
           "name": "UnauthorizedError",
         },
         {
           "code": 4,
           "errorCode": "INVALID_NONCE",
-          "message": "Invalid nonce",
+          "message": "Invalid nonce (replay or stale)",
           "name": "InvalidNonceError",
         },
         {
@@ -255,13 +255,13 @@ describe('CONTRACT_ERROR_CODES', () => {
         {
           "code": 6,
           "errorCode": "SESSION_KEY_EXPIRED",
-          "message": "Session key expired",
+          "message": "Session key has expired",
           "name": "SessionKeyExpiredError",
         },
         {
           "code": 7,
           "errorCode": "INSUFFICIENT_PERMISSION",
-          "message": "Insufficient permission",
+          "message": "Insufficient permission for this operation",
           "name": "InsufficientPermissionError",
         },
       ]

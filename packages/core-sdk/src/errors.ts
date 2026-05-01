@@ -179,6 +179,9 @@ export class InvalidAmountError extends AncoreSdkError {
     super('INVALID_AMOUNT', message);
     this.name = 'InvalidAmountError';
     Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Normalization helpers (canonical contract with UI/frontend)
 // ---------------------------------------------------------------------------
