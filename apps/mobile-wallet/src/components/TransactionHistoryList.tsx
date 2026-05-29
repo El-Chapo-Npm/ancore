@@ -34,7 +34,7 @@ export const TransactionHistoryList = ({
   formatTimestamp = defaultFormatTimestamp,
 }: Props) => {
   if (isLoadingInitial) {
-    return <p aria-live="polite">Loading transactions…</p>;
+    return <p aria-live="polite">Loading transactions...</p>;
   }
 
   if (error && transactions.length === 0) {
@@ -61,7 +61,7 @@ export const TransactionHistoryList = ({
   return (
     <section>
       <button onClick={onRefresh} disabled={isRefreshing}>
-        {isRefreshing ? 'Refreshing…' : 'Refresh'}
+        {isRefreshing ? 'Refreshing...' : 'Refresh'}
       </button>
 
       {error ? (
@@ -80,7 +80,7 @@ export const TransactionHistoryList = ({
             <TransactionStatusIcon status={tx.status} onUnknownStatus={onUnknownStatus} />
             <div className="flex-1">
               <strong>{tx.direction === 'in' ? 'Received' : 'Sent'}</strong> {tx.amount}
-              {tx.asset ? ` ${tx.asset}` : ''} · {formatTimestamp(tx.timestamp)}
+              {tx.asset ? ` ${tx.asset}` : ''} &middot; {formatTimestamp(tx.timestamp)}
             </div>
           </li>
         ))}
@@ -88,7 +88,7 @@ export const TransactionHistoryList = ({
 
       {hasMore ? (
         <button onClick={onLoadMore} disabled={isLoadingMore}>
-          {isLoadingMore ? 'Loading more…' : 'Load more'}
+          {isLoadingMore ? 'Loading more...' : 'Load more'}
         </button>
       ) : (
         <p>End of transaction history</p>
