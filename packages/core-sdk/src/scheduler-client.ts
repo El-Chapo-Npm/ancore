@@ -1,7 +1,3 @@
-/**
- * Shared HTTP client for the relayer scheduled-transfer API.
- */
-
 import type {
   CreateScheduledTransferInput,
   ScheduledTransfer,
