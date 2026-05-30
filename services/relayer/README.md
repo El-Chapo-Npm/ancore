@@ -26,6 +26,73 @@ Transaction relay service for the Ancore account abstraction layer. Accepts sign
 
 All endpoints accept and return `application/json`.
 
+### OpenAPI Specification
+
+The service publishes an OpenAPI 3.1 specification that documents all endpoints, request/response schemas, and authentication requirements.
+
+**Specification file:** `services/relayer/openapi.yaml`
+
+**View the spec:**
+```bash
+# View raw specification
+cat services/relayer/openapi.yaml
+
+# Or use a tool like Redoc locally
+npx @redocly/cli preview-docs services/relayer/openapi.yaml
+```
+
+### Generated TypeScript Types
+
+The OpenAPI specification can be used to generate TypeScript types for use in external integrations (e.g., wallet teams). This ensures type safety when calling the relayer API.
+
+**Regenerate types:**
+```bash
+# From repository root
+pnpm install -D openapi-typescript
+pnpm generate:openapi-types
+
+# Or run the script directly
+npx ts-node scripts/generate-openapi-types.ts
+```
+
+**Generated file:** `services/relayer/src/api/openapi-types.ts`
+
+The generated types include:
+- Request schemas (`RelayExecuteRequest`, `RelayValidateRequest`)
+- Response schemas (`RelayExecuteResponse`, `ValidationResult`, `HealthResponse`)
+- Error schemas (`RelayError`, `ValidationErrorResponse`)
+
+**Usage in external projects:**
+```typescript
+import type {
+  RelayExecuteRequest,
+  RelayExecuteResponse,
+  ValidationErrorResponse
+} from '@ancore/relayer/src/api/openapi-types';
+
+// Type-safe request construction
+const request: RelayExecuteRequest = {
+  sessionKey: 'a'.repeat(64),
+  operation: 'relay_execute',
+  parameters: { /* ... */ },
+  signature: 'b'.repeat(128),
+  nonce: 1,
+};
+```
+
+### Contract Tests
+
+The service includes contract tests that verify the actual API implementation matches the OpenAPI specification. These tests boot the real Express app and assert that routes, status codes, and response schemas align with the documented specification.
+
+**Run contract tests:**
+```bash
+pnpm --filter @ancore/relayer test -- tests/contract
+```
+
+If contract tests fail, it indicates either:
+1. The implementation has changed and the spec needs updating
+2. The spec has changed and the implementation needs updating
+
 ### `POST /relay/execute`
 
 Execute a signed relay transaction.
@@ -247,6 +314,49 @@ Dependent services should:
 
 ---
 
+## Example cURL Commands
+
+**Execute a relay transaction:**
+```bash
+curl -X POST http://localhost:3000/relay/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "idempotency-key: unique-request-id" \
+  -d '{
+    "sessionKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "operation": "relay_execute",
+    "parameters": {
+      "accountAddress": "GBBM6BKZPEBWYY3A3YR4IK7T7XZM5JC5K7NYGR7KDCXYBCJVPQYV5YAA",
+      "to": "GD7OEZ2NYNQXK7FLTLQZZCNY2DZV5C7M3F4TNZBAYEBQKVU5RQV6SRQQ",
+      "functionName": "transfer",
+      "args": ["base64_encoded_xdr"]
+    },
+    "signature": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "nonce": 1
+  }'
+```
+
+**Validate a relay transaction:**
+```bash
+curl -X POST http://localhost:3000/relay/validate \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "operation": "relay_execute",
+    "parameters": {
+      "accountAddress": "GBBM6BKZPEBWYY3A3YR4IK7T7XZM5JC5K7NYGR7KDCXYBCJVPQYV5YAA",
+      "to": "GD7OEZ2NYNQXK7FLTLQZZCNY2DZV5C7M3F4TNZBAYEBQKVU5RQV6SRQQ",
+      "functionName": "transfer",
+      "args": ["base64_encoded_xdr"]
+    },
+    "signature": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "nonce": 1
+  }'
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -256,14 +366,16 @@ services/relayer/
 │   ├── handlers/         # Express route handlers (factories)
 │   ├── middleware/        # Auth and validation middleware
 │   ├── services/         # Core business logic (RelayService)
-│   ├── api/              # Zod schemas for existing API surface
+│   ├── api/              # Zod schemas and OpenAPI types
 │   ├── queue/            # In-memory job queue
 │   ├── workers/          # Queue worker
 │   └── server.ts         # App factory + entrypoint
 ├── tests/
 │   ├── unit/             # Unit tests (RelayService, middleware)
-│   └── integration/      # Supertest integration tests (all endpoints)
+│   ├── integration/      # Supertest integration tests (all endpoints)
+│   └── contract/         # OpenAPI contract tests (validate spec compliance)
 ├── package.json
 ├── tsconfig.json
+├── openapi.yaml          # OpenAPI 3.1 specification
 └── README.md
 ```
