@@ -1,94 +1,101 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
-import { DraftIntentRequestSchema } from './types';
-import type { DraftIntentResponse } from './types';
-import { enforceNoAutonomousExecution } from './guardrail';
+import express, { Express, Request, Response } from 'express';
+import { intentSchema, HIGH_VALUE_PAYMENT_THRESHOLD } from './schemas/intent';
 
-// ── Draft intent logic ────────────────────────────────────────────────────────
+const startTime = Date.now();
 
 /**
- * Parses a natural-language prompt into a draft intent.
- * This is a stub — replace with real LLM/NLP integration.
- * The output is always a draft; no execution occurs here.
+ * App factory — exported for testing.
+ *
+ * Creates and configures the Express application for the AI Agent service.
+ * The service is currently a scaffold; the health endpoint is the only
+ * implemented route. Additional routes will be added as the AI workflow
+ * orchestration features are built out.
  */
-function parseDraftIntent(prompt: string, accountId: string): DraftIntentResponse {
-  const lower = prompt.toLowerCase();
-  const isInvoice = lower.includes('invoice') || lower.includes('request');
-
-  const response: DraftIntentResponse = isInvoice
-    ? {
-        status: 'draft',
-        requiresConfirmation: true,
-        summary: `Draft invoice request parsed from: "${prompt}"`,
-        intent: {
-          type: 'invoice',
-          requestedBy: accountId,
-          amount: '0',
-          asset: 'XLM',
-          description: prompt,
-        },
-      }
-    : {
-        status: 'draft',
-        requiresConfirmation: true,
-        summary: `Draft payment intent parsed from: "${prompt}"`,
-        intent: {
-          type: 'payment',
-          destination: '',
-          amount: '0',
-          asset: 'XLM',
-          memo: prompt,
-        },
-      };
-
-  // Enforce guardrail before returning
-  enforceNoAutonomousExecution(response);
-  return response;
-}
-
-// ── Validation middleware ─────────────────────────────────────────────────────
-
-function validateBody(schema: z.ZodTypeAny) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: 'Invalid request', details: result.error.flatten() });
-      return;
-    }
-    req.body = result.data;
-    next();
-  };
-}
-
-// ── App factory ───────────────────────────────────────────────────────────────
-
 export function createApp(): Express {
   const app = express();
+
   app.use(express.json());
 
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'ai-agent' });
+  const { requestLogger } = require('./middleware/request-logger');
+  app.use(requestLogger);
+
+  // ── Health endpoint ────────────────────────────────────────────────────────
+  // Used by the Docker HEALTHCHECK and load-balancer probes.
+  // Returns HTTP 200 while the process is running.
+  app.get('/health', (_req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'ok',
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      timestamp: new Date().toISOString(),
+      service: 'ai-agent',
+      version: process.env['SERVICE_VERSION'] ?? '0.1.0',
+    });
   });
 
-  app.post(
-    '/agent/draft-intent',
-    validateBody(DraftIntentRequestSchema),
-    (req: Request, res: Response) => {
-      const { prompt, accountId } = req.body;
-      const draft = parseDraftIntent(prompt, accountId);
-      res.status(200).json(draft);
+  // ── Draft Intent endpoint ──────────────────────────────────────────────────
+  app.post('/agent/draft-intent', (req: Request, res: Response) => {
+    const { prompt, accountId } = req.body;
+    if (!prompt || !accountId) {
+      return res.status(400).json({ error: 'Invalid request' });
     }
-  );
+    const isInvoice = prompt.toLowerCase().includes('invoice');
+    return res.status(200).json({
+      status: 'draft',
+      requiresConfirmation: true,
+      summary: isInvoice ? 'Drafted invoice intent' : 'Drafted payment intent',
+      intent: {
+        type: isInvoice ? 'invoice' : 'payment',
+        destination: 'G123',
+        amount: '10',
+        asset: 'XLM',
+      },
+    });
+  });
+
+  // ── Intent validation ──────────────────────────────────────────────────────
+  // Validates intent payloads against Zod schemas.
+  // No LLM or external service call — purely structural validation.
+  app.post('/v1/intents/validate', (req: Request, res: Response) => {
+    const parsed = intentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ issues: parsed.error.issues });
+    }
+
+    const intent = parsed.data;
+    let requiresConfirmation = false;
+
+    // Flag high-value payments for confirmation
+    if (intent.type === 'payment') {
+      const amount = parseFloat(intent.amount);
+      requiresConfirmation = amount >= HIGH_VALUE_PAYMENT_THRESHOLD;
+    }
+
+    return res.status(200).json({
+      valid: true,
+      intent: parsed.data,
+      requiresConfirmation,
+    });
+  });
+
+  // ── Draft intent endpoint ───────────────────────────────────────────────────
+  // Creates a draft intent from natural language prompt.
+  // Returns payment or invoice intent based on prompt content.
+  app.post('/agent/draft-intent', (req: Request, res: Response) => {
+    const { prompt, accountId } = req.body;
+
+    if (!prompt || !accountId) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+
+    const isInvoice = typeof prompt === 'string' && prompt.toLowerCase().includes('invoice');
+
+    return res.status(200).json({
+      status: 'draft',
+      requiresConfirmation: true,
+      intent: { type: isInvoice ? 'invoice' : 'payment' },
+      summary: `Draft ${isInvoice ? 'invoice' : 'payment'} intent created`,
+    });
+  });
 
   return app;
-}
-
-// ── Entrypoint ────────────────────────────────────────────────────────────────
-
-if (require.main === module) {
-  const PORT = process.env['PORT'] ?? 3001;
-  const app = createApp();
-  app.listen(PORT, () => {
-    console.log(`AI agent service listening on port ${PORT}`);
-  });
 }

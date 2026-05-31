@@ -17,6 +17,7 @@ mod repositories;
 use api::account_activity;
 use api::health;
 use api::metrics;
+use api::statements;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -74,6 +75,19 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Connected to database");
 
+    // Load ingest checkpoint cursor on startup for durable resume.
+    let checkpoint_store =
+        ancore_indexer::ingest::PostgresCheckpointStore::new(pool.clone());
+    match checkpoint_store.load("main").await {
+        Ok(Some(cp)) => tracing::info!(
+            stream = %cp.stream,
+            last_ledger_seq = cp.last_ledger_seq,
+            "ingest checkpoint loaded"
+        ),
+        Ok(None) => tracing::info!("no ingest checkpoint found, starting fresh"),
+        Err(err) => tracing::warn!(error = %err, "failed to load ingest checkpoint"),
+    }
+
     // Build our application with routes
     let app = Router::new()
         // Account activity query API
@@ -88,6 +102,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/v1/accounts/:account_id/activity/types",
             get(account_activity::list_types_handler),
+        )
+        .route(
+            "/api/v1/accounts/:account_id/statements/rows",
+            get(statements::rows_handler),
         )
         .route("/health", get(health::health_handler))
         .route("/metrics", get(metrics::metrics_handler))

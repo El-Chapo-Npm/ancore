@@ -1,91 +1,195 @@
-# AI Agent Service
+# @ancore/ai-agent
 
-Minimal MVP service for AI-assisted financial intent drafting on the Ancore platform.
+AI-assisted financial workflow orchestration service for the Ancore account abstraction layer.
 
-## Overview
+---
 
-The AI agent parses natural-language prompts into **draft** payment or invoice intents. It never executes any financial operation autonomously — all outputs require explicit user confirmation before any on-chain action is taken.
+## Status
 
-## Endpoints
+The service is currently a **scaffold** with a production-ready container setup.
+The health endpoint is implemented; AI workflow routes will be added incrementally.
+
+---
+
+## Deployment Requirements
+
+| Requirement     | Value                            |
+| --------------- | -------------------------------- |
+| Node.js         | >= 20.0.0                        |
+| Package manager | pnpm >= 9.0.0                    |
+| Port            | `PORT` env var (default: `3001`) |
+
+---
+
+## Environment Variables
+
+| Variable          | Required | Default      | Description                                        |
+| ----------------- | -------- | ------------ | -------------------------------------------------- |
+| `PORT`            | No       | `3001`       | HTTP listen port                                   |
+| `NODE_ENV`        | No       | `production` | Runtime environment (`production` / `development`) |
+| `SERVICE_VERSION` | No       | `0.1.0`      | Version string returned by the `/health` endpoint  |
+
+---
+
+## API
 
 ### `GET /health`
 
-Returns service liveness status.
+Health probe used by Docker HEALTHCHECK and load-balancer readiness checks.
+No authentication required.
 
-```json
-{ "status": "ok", "service": "ai-agent" }
-```
-
-### `POST /agent/draft-intent`
-
-Parses a prompt into a draft financial intent.
-
-**Request body:**
+**Response `200`:**
 
 ```json
 {
-  "prompt": "Send 10 XLM to Alice",
-  "accountId": "GABC...",
-  "context": {}
+  "status": "ok",
+  "uptime": 42,
+  "timestamp": "2026-05-29T14:00:00.000Z",
+  "service": "ai-agent",
+  "version": "0.1.0"
 }
 ```
 
-**Response:**
+### `POST /v1/intents/validate`
+
+Validates agent-extracted intents.
+
+**Supported Intents:**
+
+1. **Payment Intent (`payment`):** Transfer funds. Requires `amount`, `asset` (`XLM` or `USDC`), and `destination`.
+2. **Invoice Intent (`invoice`):** Request invoice creation. Requires `amount`, `asset` (`XLM` or `USDC`), `recipient` (supports Unicode multilingual), and `dueDate` (valid parseable date).
+
+**Response `200` (Valid):**
 
 ```json
 {
-  "status": "draft",
-  "requiresConfirmation": true,
-  "summary": "Draft payment intent parsed from: \"Send 10 XLM to Alice\"",
+  "valid": true,
   "intent": {
-    "type": "payment",
-    "destination": "",
-    "amount": "0",
-    "asset": "XLM",
-    "memo": "Send 10 XLM to Alice"
+    "type": "invoice",
+    "amount": "150.00",
+    "asset": "USDC",
+    "recipient": "Alice",
+    "dueDate": "2026-12-31T23:59:59Z"
   }
 }
 ```
 
-## Security Boundaries
+**Response `422` (Invalid):**
 
-### What this service does
+```json
+{
+  "issues": [
+    {
+      "code": "invalid_type",
+      "expected": "string",
+      "received": "undefined",
+      "path": ["dueDate"],
+      "message": "Required"
+    }
+  ]
+}
+```
 
-- Parses natural-language prompts into structured draft intents
-- Returns typed, human-reviewable output for user confirmation
-- Enforces the no-autonomous-execution guardrail on every response
+---
 
-### What this service does NOT do
+## Running with Docker
 
-- **No on-chain execution** — the service never submits transactions to Stellar
-- **No key management** — no private keys are held or accessed
-- **No fund movement** — zero financial operations are performed without explicit user confirmation
-- **No persistent state** — no user data or financial state is stored
+### Build the image
 
-### Guardrail enforcement
+```bash
+docker build -t ancore/ai-agent:latest services/ai-agent
+```
 
-Every response from `/agent/draft-intent` is validated by `enforceNoAutonomousExecution` before being returned. This function throws if:
+### Run the container
 
-- `status` is anything other than `"draft"`
-- `requiresConfirmation` is not `true`
+```bash
+docker run -d \
+  --name ai-agent \
+  -p 3001:3001 \
+  -e NODE_ENV=production \
+  -e SERVICE_VERSION=0.1.0 \
+  ancore/ai-agent:latest
+```
 
-This is a hard invariant: the agent is a **suggestion engine only**.
+### Verify the health endpoint
 
-## Limitations
+```bash
+curl http://localhost:3001/health
+```
 
-- The current intent parser is a stub (keyword-based). Replace with a real LLM/NLP integration before production use.
-- Parsed `amount` and `destination` fields are placeholders — the real parser must extract these from the prompt.
-- No authentication or rate limiting is implemented in this MVP. Add these before exposing the service externally.
-- This service is classified as **Medium Risk** per the Ancore security model (`services/**`).
+### Check container health status
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' ai-agent
+```
+
+---
 
 ## Development
 
 ```bash
+# Install dependencies (from repo root)
 pnpm install
-pnpm test
-pnpm build
+
+# Build
+pnpm --filter @ancore/ai-agent build
+
+# Run tests
+pnpm --filter @ancore/ai-agent test
+
+# Start (development, requires ts-node)
+pnpm --filter @ancore/ai-agent dev
 ```
 
-## Status
+---
 
-MVP scaffold — not production-ready. See [issue #420](https://github.com/ancore-org/ancore/issues/420) and the [roadmap](../../README.md#roadmap) for planned work.
+## Logging
+
+All requests are logged as structured JSON objects to `stdout` by a request logger middleware.
+
+### Privacy and Redaction
+
+To prevent PII and prompt leaks, the logging system automatically redacts sensitive fields like `prompt` and `freeText` from all log output, even when `NODE_ENV` is not production. If you run the service with debug logging enabled, the full request bodies will still never expose user prompts.
+
+**Example log entry:**
+
+```json
+{
+  "level": "info",
+  "timestamp": "2026-05-31T14:00:00.000Z",
+  "message": "request_complete",
+  "route": "/agent/draft-intent",
+  "method": "POST",
+  "statusCode": 200,
+  "durationMs": 42,
+  "accountId": "123",
+  "intentType": "payment"
+}
+```
+
+---
+
+## Docker Design
+
+The Dockerfile uses a **three-stage multi-stage build**:
+
+| Stage     | Base image       | Purpose                                |
+| --------- | ---------------- | -------------------------------------- |
+| `build`   | `node:20-alpine` | Compile TypeScript → `dist/`           |
+| `deps`    | `node:20-alpine` | Install production-only `node_modules` |
+| `runtime` | `node:20-alpine` | Minimal runtime; runs as non-root user |
+
+Security properties of the runtime image:
+
+- Runs as a **non-root user** (`ancore:ancore`, created at build time)
+- Only production dependencies are present — no TypeScript compiler, no test tools
+- `curl` is installed solely for the HEALTHCHECK probe
+
+---
+
+## Planned Responsibilities
+
+- Natural-language to financial action intent parsing
+- Safety checks and user confirmation flows
+- Draft invoice / payment request generation
+- Routing to off-chain analytics / risk systems before settlement

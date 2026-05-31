@@ -120,6 +120,18 @@ pub enum DataKey {
     Version,
 }
 
+/// Caller authorization path for [`AncoreAccount::execute`].
+///
+/// `Owner` requires the registered owner address signature; `SessionKey`
+/// carries the public key the caller claims to be acting on behalf of, which
+/// must match a stored, unexpired session key with `PERMISSION_EXECUTE`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CallerIdentity {
+    Owner,
+    SessionKey(BytesN<32>),
+}
+
 const DAY_IN_LEDGERS: u32 = 17280; // 24 hours * 60 min * 60 sec / 5 sec per ledger
 const INSTANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS; // 30 days
 const INSTANCE_BUMP_THRESHOLD: u32 = 15 * DAY_IN_LEDGERS; // 15 days
@@ -461,8 +473,16 @@ impl AncoreAccount {
 
     /// Refresh the TTL of a session key
     pub fn refresh_session_key_ttl(env: Env, public_key: BytesN<32>) -> Result<(), ContractError> {
+        let owner = Self::get_owner(env.clone())?;
+        owner.require_auth();
+
         let mut session_key = Self::get_session_key(env.clone(), public_key.clone())
             .ok_or(ContractError::SessionKeyNotFound)?;
+
+        let current_timestamp = env.ledger().timestamp();
+        if session_key.expires_at <= current_timestamp {
+            return Err(ContractError::SessionKeyExpirationInPast);
+        }
 
         // Normalize once at refresh entry point to remove legacy ambiguity.
         let normalized_expiry = Self::normalize_expiry_timestamp(session_key.expires_at)?;
@@ -1132,6 +1152,95 @@ mod test {
             &Some(sig),
             &Some(payload),
         );
+    }
+
+    /// Integration test for execute() via a session-key signature.
+    ///
+    /// Covers the three acceptance criteria from issue #680:
+    /// 1. Happy path: session key signs the canonical payload and the contract accepts,
+    ///    bumping the nonce in the snapshot.
+    /// 2. Wrong signature: the contract returns `InvalidSignature` and the nonce is not
+    ///    advanced.
+    /// 3. Expired key: advancing the ledger past `expires_at` causes execute to return
+    ///    `SessionKeyExpired` and the nonce is not advanced.
+    #[test]
+    fn test_execute_session_key_end_to_end() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+        env.mock_all_auths();
+
+        env.ledger().set_timestamp(1_000);
+
+        let mut csprng = OsRng;
+        let signing_key = SigningKey::generate(&mut csprng);
+        let session_pk = BytesN::from_array(&env, &signing_key.verifying_key().to_bytes());
+
+        let expires_at = env.ledger().timestamp() + 10_000;
+        let mut permissions = Vec::new(&env);
+        permissions.push_back(PERMISSION_EXECUTE);
+        client.add_session_key(&session_pk, &expires_at, &permissions);
+
+        let callee_id = env.register_contract(None, AncoreAccount);
+        let function = soroban_sdk::symbol_short!("get_nonce");
+        let args = Vec::new(&env);
+
+        // 1. Happy path — session key signs the canonical payload for nonce=0.
+        let (sig, payload) = sign_payload(&env, &signing_key, &callee_id, &function, &args, 0);
+        let result = client.execute(
+            &CallerIdentity::SessionKey(session_pk.clone()),
+            &callee_id,
+            &function,
+            &args,
+            &0u64,
+            &Some(session_pk.clone()),
+            &Some(sig),
+            &Some(payload),
+        );
+        let nonce_result: u64 = soroban_sdk::FromVal::from_val(&env, &result);
+        assert_eq!(nonce_result, 0);
+        // Snapshot side-effect: the account's nonce has been incremented.
+        assert_eq!(client.get_nonce(), 1);
+
+        // 2. Wrong signature — tamper one byte; the contract must reject and the nonce
+        //    must not advance.
+        let (good_sig, good_payload) =
+            sign_payload(&env, &signing_key, &callee_id, &function, &args, 1);
+        let mut tampered = good_sig.to_array();
+        tampered[0] ^= 0xFF;
+        let bad_sig = BytesN::from_array(&env, &tampered);
+        let bad_result = client.try_execute(
+            &CallerIdentity::SessionKey(session_pk.clone()),
+            &callee_id,
+            &function,
+            &args,
+            &1u64,
+            &Some(session_pk.clone()),
+            &Some(bad_sig),
+            &Some(good_payload),
+        );
+        assert_eq!(bad_result, Err(Ok(ContractError::InvalidSignature)));
+        assert_eq!(client.get_nonce(), 1);
+
+        // 3. Expired key — advance the ledger past `expires_at`; execute must return
+        //    SessionKeyExpired before invoking the callee, leaving the nonce unchanged.
+        env.ledger().set_timestamp(expires_at + 1);
+        let (sig2, payload2) = sign_payload(&env, &signing_key, &callee_id, &function, &args, 1);
+        let expired_result = client.try_execute(
+            &CallerIdentity::SessionKey(session_pk.clone()),
+            &callee_id,
+            &function,
+            &args,
+            &1u64,
+            &Some(session_pk),
+            &Some(sig2),
+            &Some(payload2),
+        );
+        assert_eq!(expired_result, Err(Ok(ContractError::SessionKeyExpired)));
+        assert_eq!(client.get_nonce(), 1);
     }
 
     #[test]
@@ -1964,7 +2073,7 @@ mod tests {
         env.mock_all_auths();
 
         let session_pk = BytesN::from_array(&env, &[30u8; 32]);
-        let expires_at = 10000u64;
+        let expires_at = env.ledger().timestamp() + 10000u64;
         client.add_session_key(&session_pk, &expires_at, &Vec::new(&env));
 
         client.refresh_session_key_ttl(&session_pk);
@@ -1984,6 +2093,51 @@ mod tests {
         let (pk, exp): (BytesN<32>, u64) = soroban_sdk::FromVal::from_val(&env, &data);
         assert_eq!(pk, session_pk);
         assert_eq!(exp, expires_at);
+
+        // Verify storage readback via get_session_key
+        let stored_key = client.get_session_key(&session_pk).unwrap();
+        assert_eq!(stored_key.expires_at, expires_at);
+    }
+
+    #[test]
+    fn test_refresh_session_key_ttl_unauthorized_caller_rejected() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+
+        // Don't mock auths, so the owner authorization will fail
+        let session_pk = BytesN::from_array(&env, &[31u8; 32]);
+        
+        let result = client.try_refresh_session_key_ttl(&session_pk);
+        assert!(result.is_err(), "unauthorized caller must be rejected");
+    }
+
+    #[test]
+    fn test_refresh_session_key_ttl_past_expires_at_rejected() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+        env.mock_all_auths();
+
+        let session_pk = BytesN::from_array(&env, &[32u8; 32]);
+        let expires_at = env.ledger().timestamp() + 1000u64;
+        client.add_session_key(&session_pk, &expires_at, &Vec::new(&env));
+
+        // Advance ledger time past expires_at
+        env.ledger().set_timestamp(expires_at + 1);
+
+        let result = client.try_refresh_session_key_ttl(&session_pk);
+        assert_eq!(
+            result,
+            Err(Ok(ContractError::SessionKeyExpirationInPast)),
+            "refreshing an expired session key must fail"
+        );
     }
 
     #[test]
