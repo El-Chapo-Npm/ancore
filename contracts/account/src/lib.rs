@@ -1110,6 +1110,95 @@ mod test {
         );
     }
 
+    // ── migrate monotonicity tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_migrate_1_to_2_succeeds() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+
+        assert_eq!(client.get_version(), 1);
+
+        env.mock_all_auths();
+        client.migrate(&2u32);
+
+        assert_eq!(client.get_version(), 2);
+    }
+
+    #[test]
+    fn test_migrate_emits_migrated_event() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+
+        env.mock_all_auths();
+        client.migrate(&2u32);
+
+        let events_list = env.events().all();
+        let migrated_event = events_list.iter().find(|(_, topics, _)| {
+            topics.iter().any(|t| {
+                let sym: soroban_sdk::Symbol = soroban_sdk::FromVal::from_val(&env, t);
+                sym == events::migrated(&env)
+            })
+        });
+
+        assert!(migrated_event.is_some(), "migrated event must be emitted");
+
+        let (_, _, data) = migrated_event.unwrap();
+        let (old_ver, new_ver): (u32, u32) = soroban_sdk::FromVal::from_val(&env, &data);
+        assert_eq!(old_ver, 1);
+        assert_eq!(new_ver, 2);
+    }
+
+    #[test]
+    fn test_migrate_rejects_non_increasing_version() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+
+        env.mock_all_auths();
+        // Advance to version 2
+        client.migrate(&2u32);
+
+        // Attempt to go back to version 1 — must fail with InvalidVersion (#8)
+        let result = client.try_migrate(&1u32);
+        assert_eq!(result, Err(Ok(ContractError::InvalidVersion)));
+
+        // Version must remain at 2
+        assert_eq!(client.get_version(), 2);
+    }
+
+    #[test]
+    fn test_migrate_rejects_equal_version() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AncoreAccount);
+        let client = AncoreAccountClient::new(&env, &contract_id);
+
+        let owner = Address::generate(&env);
+        init(&env, &client, &owner);
+
+        env.mock_all_auths();
+        // Advance to version 2
+        client.migrate(&2u32);
+
+        // Attempt to migrate to the same version — must fail with InvalidVersion (#8)
+        let result = client.try_migrate(&2u32);
+        assert_eq!(result, Err(Ok(ContractError::InvalidVersion)));
+
+        // Version must remain at 2
+        assert_eq!(client.get_version(), 2);
+    }
+
     /// Integration test for execute() via a session-key signature.
     ///
     /// Covers the three acceptance criteria from issue #680:

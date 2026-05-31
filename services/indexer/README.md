@@ -156,6 +156,124 @@ git commit -m "chore(indexer): regenerate sqlx offline cache"
 | Tests fail with DB connection error | Integration tests require a live DB | Use `--lib` flag to run unit tests only, or set `TEST_DATABASE_URL` |
 | `cargo sqlx` not found | `sqlx-cli` not installed | `cargo install sqlx-cli --no-default-features --features postgres` |
 
+## API Examples
+
+The following examples assume a local docker-compose stack is running. Run the smoke-test script to verify all endpoints in one shot:
+
+```bash
+bash scripts/curl-smoke-indexer.sh
+```
+
+### Health check
+
+```bash
+curl -s localhost:8080/health | jq
+```
+
+Sample response (`fixtures/api/health-response.json`):
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "uptime_seconds": 3600
+}
+```
+
+### List account activity
+
+```bash
+ACCOUNT="GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA"
+
+curl -s "localhost:8080/api/v1/accounts/$ACCOUNT/activity?limit=5" | jq
+```
+
+Sample response (`fixtures/api/account-activity-response.json`):
+
+```json
+{
+  "data": [
+    {
+      "id": "018e1f2a-3b4c-7d8e-9f0a-1b2c3d4e5f6a",
+      "account_id": "GABC123...",
+      "activity_type": "payment",
+      "amount": "100.0000000",
+      "asset": "USDC:GBBD47IF6...",
+      "counterparty": "GXYZ987...",
+      "tx_hash": "a1b2c3d4...",
+      "ledger_seq": 50123456,
+      "created_at": "2024-01-15T10:30:00Z",
+      "metadata": { "memo": "Invoice #1042" }
+    }
+  ],
+  "pagination": {
+    "has_next_page": true,
+    "has_previous_page": false,
+    "next_cursor": "eyJ0IjoiMjAyNC...",
+    "prev_cursor": null,
+    "count": 1
+  }
+}
+```
+
+### Filter by activity type
+
+```bash
+curl -s "localhost:8080/api/v1/accounts/$ACCOUNT/activity?activity_type=payment&limit=5" | jq
+```
+
+### Cursor pagination
+
+Use the `next_cursor` value from a previous response:
+
+```bash
+curl -s "localhost:8080/api/v1/accounts/$ACCOUNT/activity?cursor_after=eyJ0IjoiMjAyNC...&limit=5" | jq
+```
+
+### Filter by ledger range
+
+```bash
+curl -s "localhost:8080/api/v1/accounts/$ACCOUNT/activity?ledger_min=50000000&ledger_max=50200000" | jq
+```
+
+### Error envelope
+
+Invalid parameters return a structured error. Example — `limit` exceeds maximum:
+
+```bash
+curl -s "localhost:8080/api/v1/accounts/$ACCOUNT/activity?limit=500" | jq
+```
+
+Sample error response (`fixtures/api/error-response.json`):
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid query parameters",
+    "details": [
+      { "field": "limit", "message": "limit must be between 1 and 100, got 500" }
+    ]
+  }
+}
+```
+
+### docker-compose walkthrough
+
+```bash
+# 1. Start the full stack
+docker-compose up -d
+
+# 2. Wait for services to be healthy
+bash scripts/dev/smoke-stack.sh
+
+# 3. Run the indexer API smoke test
+bash scripts/curl-smoke-indexer.sh
+
+# 4. Inspect logs if a check fails
+docker-compose logs indexer
+```
+
 ## Setup
 
 ### Prerequisites

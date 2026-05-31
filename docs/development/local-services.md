@@ -99,6 +99,8 @@ pnpm --filter @ancore/indexer dev
 **Read More:**
 
 - [Indexer README](../../services/indexer/README.md)
+- [Indexer API Examples & curl smoke test](../../services/indexer/README.md#api-examples)
+- [API fixtures](../../fixtures/api/) — committed sample JSON responses for all endpoints
 
 ### Relayer (Port 3001)
 
