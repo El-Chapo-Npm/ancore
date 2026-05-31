@@ -93,10 +93,13 @@ export const SendFlow: React.FC = () => {
     [state.policyAction]
   );
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setState((prev) => ({ ...prev, [name]: value }));
-  }, []);
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setState((prev) => ({ ...prev, [name]: value }));
+    },
+    []
+  );
 
   return (
     <div className="max-w-2xl mx-auto p-8">
@@ -131,7 +134,9 @@ export const SendFlow: React.FC = () => {
 
           {/* Recipient Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Recipient Address</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Recipient Address
+            </label>
             <input
               type="text"
               name="recipient"
@@ -167,7 +172,9 @@ export const SendFlow: React.FC = () => {
             <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <strong className="text-amber-900 text-sm uppercase tracking-wide">Verification Required</strong>
+                <strong className="text-amber-900 text-sm uppercase tracking-wide">
+                  Verification Required
+                </strong>
                 <p className="text-sm text-amber-700 mt-1">{state.policyMessage}</p>
               </div>
             </div>
@@ -189,16 +196,22 @@ export const SendFlow: React.FC = () => {
           {/* Policy Status */}
           <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
-              <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Policy Status</p>
+              <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold">
+                Policy Status
+              </p>
               <p className="text-sm font-medium mt-1 capitalize">
                 {state.policyAction === 'block' && <span className="text-red-600">Blocked</span>}
-                {state.policyAction === 'step_up' && <span className="text-amber-600">Requires Verification</span>}
+                {state.policyAction === 'step_up' && (
+                  <span className="text-amber-600">Requires Verification</span>
+                )}
                 {state.policyAction === 'allow' && <span className="text-green-600">Allowed</span>}
                 {!state.policyAction && <span className="text-gray-600">Enter amount</span>}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold">Daily Remaining</p>
+              <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold">
+                Daily Remaining
+              </p>
               <p className="text-sm font-medium mt-1">
                 {Math.max(0, userPolicy.dailyLimit - todayTotal)} XLM
               </p>
@@ -208,7 +221,9 @@ export const SendFlow: React.FC = () => {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={state.isLoading || state.policyAction === 'block' || !state.recipient || !state.amount}
+            disabled={
+              state.isLoading || state.policyAction === 'block' || !state.recipient || !state.amount
+            }
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
           >
             {state.isLoading ? (

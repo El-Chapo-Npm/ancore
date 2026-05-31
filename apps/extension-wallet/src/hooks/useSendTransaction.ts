@@ -340,8 +340,7 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
               });
             })
             .catch((err: unknown) => {
-              const message =
-                err instanceof Error ? err.message : 'Simulation failed';
+              const message = err instanceof Error ? err.message : 'Simulation failed';
               setSimulation({ status: 'error', message });
             });
         } else {
