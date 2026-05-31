@@ -1,4 +1,8 @@
-import { intentSchema, paymentIntentSchema, HIGH_VALUE_PAYMENT_THRESHOLD } from '../src/schemas/intent';
+import {
+  intentSchema,
+  paymentIntentSchema,
+  HIGH_VALUE_PAYMENT_THRESHOLD,
+} from '../src/schemas/intent';
 
 describe('Intent Schema Validation', () => {
   describe('Payment Intent', () => {

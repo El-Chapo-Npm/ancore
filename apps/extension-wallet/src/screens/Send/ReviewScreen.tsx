@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, cn } from '@ancore/ui-kit';
 import type { SendTransactionDraft } from '@/hooks/useSendTransaction';
 import { TransferNotePreview } from '@/components/TransferNotePreview';
-import { ShieldCheck, ArrowRight, Wallet, Globe, Info, AlertCircle, CalendarClock } from 'lucide-react';
+import {
+  ShieldCheck,
+  ArrowRight,
+  Wallet,
+  Globe,
+  Info,
+  AlertCircle,
+  CalendarClock,
+} from 'lucide-react';
 import type { ScheduleConfig, TransferTiming } from '@/screens/Send/ScheduleControls';
 import { SimulationPreview, type SimulationState } from './SimulationPreview';
 
@@ -105,7 +113,9 @@ export function ReviewScreen({
               <strong className="block text-[11px] uppercase tracking-widest text-amber-300 font-black">
                 Verification Required
               </strong>
-              <p className="text-[10px] text-amber-200 leading-relaxed">{transaction.policyMessage}</p>
+              <p className="text-[10px] text-amber-200 leading-relaxed">
+                {transaction.policyMessage}
+              </p>
             </div>
           </div>
         )}
@@ -210,7 +220,9 @@ export function ReviewScreen({
           </Button>
           <Button
             type="button"
-            disabled={!isConfirmed || simulation?.status === 'loading' || simulation?.status === 'error'}
+            disabled={
+              !isConfirmed || simulation?.status === 'loading' || simulation?.status === 'error'
+            }
             className="flex-[2] bg-cyan-400 text-slate-950 font-black uppercase tracking-widest rounded-2xl h-12 shadow-[0_10px_20px_rgba(34,211,238,0.2)] hover:bg-cyan-300 disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-2 text-[10px]"
             onClick={onConfirm}
           >

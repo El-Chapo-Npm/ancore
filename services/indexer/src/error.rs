@@ -1,4 +1,4 @@
-﻿use axum::{
+use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -48,6 +48,7 @@ pub enum ApiError {
     Database(#[from] sqlx::Error),
 
     #[error("Query timed out: {0}")]
+    #[allow(dead_code)]
     QueryTimeout(String),
 
     #[error("Internal server error: {0}")]
@@ -114,7 +115,11 @@ impl IntoResponse for ApiError {
                 }
             };
 
-        let envelope = ErrorEnvelope { code, message, details };
+        let envelope = ErrorEnvelope {
+            code,
+            message,
+            details,
+        };
         (status, Json(envelope)).into_response()
     }
 }

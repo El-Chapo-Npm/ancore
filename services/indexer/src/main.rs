@@ -1,22 +1,22 @@
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
+use tower_governor::GovernorLayer;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
 mod error;
+mod metrics;
 mod repositories;
+
+use ancore_indexer::ingest::CheckpointStore;
 
 use api::account_activity;
 use api::health;
-use api::metrics;
+use api::metrics::metrics_handler;
 use api::statements;
 
 #[tokio::main]
@@ -64,7 +64,8 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("Invalid database URL: {}", e))?;
 
     // Set statement timeout (query level)
-    connect_options = connect_options.options([("statement_timeout", format!("{}s", db_timeout_sec))]);
+    connect_options =
+        connect_options.options([("statement_timeout", format!("{}s", db_timeout_sec))]);
 
     // Create database connection pool
     let pool = PgPoolOptions::new()
@@ -76,8 +77,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Connected to database");
 
     // Load ingest checkpoint cursor on startup for durable resume.
-    let checkpoint_store =
-        ancore_indexer::ingest::PostgresCheckpointStore::new(pool.clone());
+    let checkpoint_store = ancore_indexer::ingest::PostgresCheckpointStore::new(pool.clone());
     match checkpoint_store.load("main").await {
         Ok(Some(cp)) => tracing::info!(
             stream = %cp.stream,
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
             get(statements::rows_handler),
         )
         .route("/health", get(health::health_handler))
-        .route("/metrics", get(metrics::metrics_handler))
+        .route("/metrics", get(metrics_handler))
         .layer(GovernorLayer {
             config: governor_conf,
         })

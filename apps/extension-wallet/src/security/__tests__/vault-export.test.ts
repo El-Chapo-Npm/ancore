@@ -66,6 +66,7 @@ describe('vault-export', () => {
   let storage: MockStorageAdapter;
 
   beforeEach(() => {
+    localStorage.clear();
     storage = new MockStorageAdapter();
     resetVaultStorageManagerForTests();
   });
@@ -179,6 +180,7 @@ describe('vault-export', () => {
         kind: 'privateKey',
         password: '',
         requirePassword: false,
+        storageManager: manager,
       })
     ).resolves.toBe(PRIVATE_KEY);
   });

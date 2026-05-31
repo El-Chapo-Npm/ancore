@@ -281,7 +281,9 @@ function TransferLimitsView({ onDone }: { onDone: () => void }) {
       </form>
 
       <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3">
-        <p className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-2">Current Settings</p>
+        <p className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-2">
+          Current Settings
+        </p>
         <ul className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
           <li>• Daily limit: {policy.dailyLimit} XLM</li>
           <li>• Step-up threshold: {policy.stepUpThreshold} XLM</li>
