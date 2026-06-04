@@ -250,6 +250,8 @@ describe('extension transaction history filters', () => {
       />
     );
 
-    expect(screen.getByText('No transactions match this filter.')).toBeInTheDocument();
+    expect(screen.getByText('No received transactions')).toBeInTheDocument();
+    expect(screen.getByText('Incoming payments will appear here.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset filter' })).toBeInTheDocument();
   });
 });

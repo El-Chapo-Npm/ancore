@@ -60,6 +60,17 @@ We are committed to providing a welcoming and inclusive environment. Please:
    pnpm test
    ```
 
+## VS Code Workspace Recommendations
+
+If you use Visual Studio Code, the repository includes a workspace recommendations file and an optional devcontainer for one-click setup.
+
+- Recommended extensions are defined in `.vscode/extensions.json`
+- Devcontainer points to Node 20, pnpm, and Rust support in `.devcontainer/devcontainer.json`
+- VS Code will also enable `editor.formatOnSave` by default for contributors using the devcontainer
+- Optional Soroban/Rust target setup can be completed after container creation with `rustup target add wasm32-unknown-unknown`
+
+To use it, open the repository in VS Code and choose **Reopen in Container** from the Command Palette.
+
 ## Development Workflow
 
 ### Branch Naming
@@ -137,6 +148,22 @@ make validate-env
 - **Extension Wallet**: [apps/extension-wallet/README.md](apps/extension-wallet/README.md)
 - **Mobile Wallet**: [apps/mobile-wallet/README.md](apps/mobile-wallet/README.md)
 - **Web Dashboard**: [apps/web-dashboard/README.md](apps/web-dashboard/README.md)
+
+### Developer Shortcuts
+
+We expose a small set of repo-root `pnpm` scripts that map to package-local commands
+using `pnpm --filter`. These make common tasks easier for contributors:
+
+```bash
+pnpm dev:extension   # start @ancore/extension-wallet dev server
+pnpm dev:dashboard   # start @ancore/web-dashboard dev server
+pnpm dev:mobile      # start @ancore/mobile-wallet dev/watch
+pnpm test:extension  # run @ancore/extension-wallet tests
+pnpm test:ui         # run @ancore/ui-kit tests
+```
+
+CI verifies these scripts on install via `scripts/verify-dev-scripts.sh` to ensure they
+resolve and respond to `--help`/dry-run flags on a clean install.
 
 ### Common Commands
 

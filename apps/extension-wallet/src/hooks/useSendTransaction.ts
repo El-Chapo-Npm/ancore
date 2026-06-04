@@ -9,6 +9,7 @@ import {
 } from '@ancore/types';
 import { mapRpcStatus, isTerminalStatus } from '@/utils/transaction-status';
 import { validateTransferNote, truncateTransferNote } from '@/utils/note-validation';
+import { validateTransferPolicy } from '@ancore/types';
 import type { ScheduleConfig, TransferTiming } from '@/screens/Send/ScheduleControls';
 import { validateSchedule } from '@/utils/schedule-validation';
 import {
@@ -19,9 +20,16 @@ import {
   type SchedulerClient,
 } from '@/services/scheduler-client';
 import { resolveHandle as defaultResolveHandle } from '@/services/handle-resolver';
+import type { SimulationState } from '@/screens/Send/SimulationPreview';
+import {
+  computeMaxSendable,
+  BASE_SEND_RESERVE,
+  DEFAULT_SEND_FEE,
+} from '@/utils/amount';
 
 export type SendStep = 'form' | 'review' | 'confirm' | 'status' | 'scheduled';
 export type TxStatus = 'idle' | 'pending' | 'confirmed' | 'failed';
+export type TransferPolicyAction = 'allow' | 'step_up' | 'block';
 
 export interface SendFormValues {
   to: string;
@@ -41,8 +49,15 @@ export interface SendTransactionDraft extends SendFormValues {
   fee: FeeEstimate;
   total: string;
   truncatedNote?: string;
+  policyAction?: TransferPolicyAction;
+  policyMessage?: string;
   recipientInput?: string;
   resolvedHandle?: ResolvedHandle;
+}
+
+export interface SimulationResult {
+  simulatedFee: string;
+  outcome: string;
 }
 
 export interface SendService {
@@ -52,6 +67,7 @@ export interface SendService {
   signTransaction: (tx: SendTransactionDraft) => Promise<string>;
   submitTransaction: (signedPayload: string) => Promise<{ txId: string }>;
   fetchTransactionStatus: (txId: string) => Promise<TxStatus>;
+  simulateTransaction?: (tx: SendTransactionDraft) => Promise<SimulationResult>;
   createScheduledTransfer?: (
     tx: SendTransactionDraft,
     schedule: ScheduleConfig
@@ -64,6 +80,9 @@ export interface UseSendTransactionOptions {
   assetDecimals?: number;
   service?: SendService;
   pollIntervalMs?: number;
+  dailyTransferLimit?: number;
+  transferStepUpThreshold?: number;
+  todayTransferTotal?: number;
   accountAddress?: string;
   schedulerClient?: SchedulerClient;
 }
@@ -75,10 +94,19 @@ export interface ValidationErrors {
   note?: string;
   password?: string;
   simulation?: string;
+  policy?: string;
+}
+
+export interface SetMaxAmountOptions {
+  to?: string;
+  asset?: string;
+  note?: string;
 }
 
 const DEFAULT_BALANCE = 250;
 const DEFAULT_POLL_MS = 1000;
+const DEFAULT_DAILY_LIMIT = 1000;
+const DEFAULT_STEP_UP_THRESHOLD = 250;
 
 const HANDLE_NOT_FOUND_MESSAGE = 'Handle not found';
 
@@ -167,6 +195,9 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
   const balance = options.balance ?? DEFAULT_BALANCE;
   const assetDecimals = options.assetDecimals ?? 7;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_MS;
+  const dailyTransferLimit = options.dailyTransferLimit ?? DEFAULT_DAILY_LIMIT;
+  const transferStepUpThreshold = options.transferStepUpThreshold ?? DEFAULT_STEP_UP_THRESHOLD;
+  const todayTransferTotal = options.todayTransferTotal ?? 0;
   const accountAddress = options.accountAddress ?? DEMO_ACCOUNT_ADDRESS;
   const schedulerClient = useMemo(
     () => options.schedulerClient ?? getExtensionSchedulerClient(),
@@ -187,6 +218,7 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
   const [schedule, setSchedule] = useState<ScheduleConfig | undefined>();
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [simulation, setSimulation] = useState<SimulationState | undefined>();
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -207,6 +239,17 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
         note: values.note ? validateTransferNote(values.note) : undefined,
       };
 
+      const numeric = Number(values.amount);
+      if (!nextErrors.amount && Number.isFinite(numeric) && numeric > 0) {
+        const policyResult = validateTransferPolicy(numeric, todayTransferTotal, {
+          dailyLimit: dailyTransferLimit,
+          stepUpThreshold: transferStepUpThreshold,
+        });
+        if (policyResult.action === 'block') {
+          nextErrors.policy = policyResult.message;
+        }
+      }
+
       if (values.timing === 'scheduled') {
         const scheduleError = validateSchedule(values.schedule);
         if (scheduleError) {
@@ -217,9 +260,15 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
       }
 
       setErrors(nextErrors);
-      return !nextErrors.to && !nextErrors.amount && !nextErrors.note && !nextErrors.simulation;
+      return (
+        !nextErrors.to &&
+        !nextErrors.amount &&
+        !nextErrors.note &&
+        !nextErrors.policy &&
+        !nextErrors.simulation
+      );
     },
-    [balance, assetDecimals]
+    [balance, assetDecimals, dailyTransferLimit, transferStepUpThreshold, todayTransferTotal]
   );
 
   const goToReview = useCallback(
@@ -261,6 +310,13 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
         const total = (Number(values.amount) + Number(estimatedFee.totalFee)).toFixed(7);
         const truncatedNote = values.note ? truncateTransferNote(values.note) : undefined;
 
+        // Determine policy action
+        const numeric = Number(values.amount);
+        const policyResult = validateTransferPolicy(numeric, todayTransferTotal, {
+          dailyLimit: dailyTransferLimit,
+          stepUpThreshold: transferStepUpThreshold,
+        });
+
         setFee(estimatedFee);
         setTx({
           ...resolvedValues,
@@ -269,8 +325,39 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
           truncatedNote,
           recipientInput,
           resolvedHandle,
+          policyAction: policyResult.action,
+          policyMessage: policyResult.message,
         });
         setStep('review');
+
+        // Run simulation in the background after entering review
+        if (service.simulateTransaction) {
+          const draft: SendTransactionDraft = {
+            ...resolvedValues,
+            fee: estimatedFee,
+            total,
+            truncatedNote,
+            recipientInput,
+            resolvedHandle,
+          };
+          setSimulation({ status: 'loading' });
+          service
+            .simulateTransaction(draft)
+            .then((result) => {
+              setSimulation({
+                status: 'success',
+                simulatedFee: result.simulatedFee,
+                outcome: result.outcome,
+              });
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : 'Simulation failed';
+              setSimulation({ status: 'error', message });
+            });
+        } else {
+          setSimulation(undefined);
+        }
+
         return true;
       } catch (error) {
         console.error('Simulation failed:', error);
@@ -281,7 +368,7 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
         setSubmitting(false);
       }
     },
-    [service, validateForm]
+    [service, validateForm, todayTransferTotal, dailyTransferLimit, transferStepUpThreshold]
   );
 
   const requestConfirm = useCallback(() => {
@@ -359,9 +446,35 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
     [accountAddress, pollIntervalMs, schedule, schedulerClient, service, timing, tx]
   );
 
-  const setMaxAmount = useCallback(() => {
-    setErrors((current) => ({ ...current, amount: undefined }));
-  }, []);
+  const setMaxAmount = useCallback(
+    async (options?: SetMaxAmountOptions) => {
+      const recipient = options?.to?.trim() || accountAddress;
+      let feeAmount = DEFAULT_SEND_FEE;
+
+      try {
+        const estimate = await service.estimateFee({
+          to: recipient,
+          amount: '0',
+          note: options?.note ?? '',
+        });
+        feeAmount = Number(estimate.totalFee) || feeAmount;
+      } catch {
+        // Falling back to a safe fee estimate if the service cannot calculate it.
+      }
+
+      const max = computeMaxSendable({
+        balance,
+        fee: feeAmount,
+        reserve: options?.asset === 'XLM' || options?.asset === undefined ? BASE_SEND_RESERVE : 0,
+        asset: options?.asset ?? 'XLM',
+        assetDecimals,
+      });
+
+      setErrors((current) => ({ ...current, amount: undefined }));
+      return max;
+    },
+    [service, balance, assetDecimals, accountAddress]
+  );
 
   return {
     balance,
@@ -375,6 +488,7 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
     schedule,
     errors,
     submitting,
+    simulation,
     setStep,
     setErrors,
     goToReview,
