@@ -1,7 +1,8 @@
 import '../../../../../packages/ensure-webcrypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { encryptSecretKey } from '@ancore/crypto';
-import { SecureStorageManager, createStorageAdapter, type StorageAdapter } from '@ancore/core-sdk';
+import * as CoreSdk from '@ancore/core-sdk';
+import { SecureStorageManager, type StorageAdapter } from '@ancore/core-sdk';
 
 import {
   VaultExportError,
@@ -10,29 +11,6 @@ import {
   verifyVaultPassword,
 } from '../vault-export';
 import { getSharedStorageManager } from '../storage-manager';
-
-vi.mock('@ancore/core-sdk', async () => {
-  const actual = await vi.importActual<typeof import('@ancore/core-sdk')>('@ancore/core-sdk');
-  let adapter: StorageAdapter | null = null;
-
-  return {
-    ...actual,
-    createStorageAdapter: () => {
-      if (!adapter) {
-        adapter = new MockStorageAdapter();
-      }
-      return adapter;
-    },
-  };
-});
-
-if (!globalThis.btoa) {
-  globalThis.btoa = (value: string) => Buffer.from(value, 'binary').toString('base64');
-}
-
-if (!globalThis.atob) {
-  globalThis.atob = (value: string) => Buffer.from(value, 'base64').toString('binary');
-}
 
 class MockStorageAdapter implements StorageAdapter {
   private store = new Map<string, unknown>();
@@ -68,7 +46,8 @@ async function seedVaultAccount(
   }
 ): Promise<SecureStorageManager> {
   const manager = new SecureStorageManager(storage);
-  await manager.unlock(PASSWORD);
+  const unlocked = await manager.unlock(PASSWORD);
+  expect(unlocked).toBe(true);
   await manager.saveAccount(account);
   manager.lock();
   return manager;
@@ -79,9 +58,13 @@ describe('vault-export', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    storage = createStorageAdapter() as MockStorageAdapter;
-    storage.clearStore();
+    storage = new MockStorageAdapter();
+    vi.spyOn(CoreSdk, 'createStorageAdapter').mockReturnValue(storage);
     resetVaultStorageManagerForTests();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('verifies the wallet password against secure storage', async () => {
