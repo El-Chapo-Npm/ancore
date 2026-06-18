@@ -16,6 +16,13 @@ import {
   validateServiceUrls,
   type ServiceUrlConfig,
 } from '@/config/urls';
+import {
+  registerAllExternalHandlers,
+  dispatchExternalRequest,
+  resolveRequest,
+  rejectRequest,
+} from '@/background/handlers/external';
+import type { ExternalApiRequest, ExternalApiMethodName } from '@ancore/types';
 
 type ChromeRuntimeManifest = {
   name: string;
@@ -300,6 +307,74 @@ registerHandler('CHECK_SERVICE_HEALTH', async () => {
       indexer: { service: 'indexer' as const, status: 'unreachable' as const },
     };
   }
+});
+
+// ---------------------------------------------------------------------------
+// External API handlers (dApp connectivity)
+// ---------------------------------------------------------------------------
+
+// Register all external API handlers
+registerAllExternalHandlers();
+
+/**
+ * Handle EXTERNAL_API_REQUEST messages from content script.
+ * These are requests from dApps to interact with the wallet.
+ */
+runtime?.onMessage?.addListener((message: any, sender: any, sendResponse: (response: any) => void) => {
+  if (message.type !== 'EXTERNAL_API_REQUEST') {
+    return false;
+  }
+
+  const request = message as ExternalApiRequest;
+  const { method, requestId, params, origin } = request;
+
+  // Validate origin
+  if (!origin || typeof origin !== 'string') {
+    sendResponse({
+      type: 'EXTERNAL_API_RESPONSE',
+      requestId,
+      ok: false,
+      error: 'Invalid origin',
+    });
+    return true;
+  }
+
+  // Validate sender origin matches
+  if (sender.origin && sender.origin !== origin) {
+    sendResponse({
+      type: 'EXTERNAL_API_RESPONSE',
+      requestId,
+      ok: false,
+      error: 'Origin mismatch',
+    });
+    return true;
+  }
+
+  // Dispatch to handler
+  dispatchExternalRequest(method as ExternalApiMethodName, {
+    origin,
+    params,
+    requestId,
+    sender,
+  })
+    .then((result) => {
+      sendResponse({
+        type: 'EXTERNAL_API_RESPONSE',
+        requestId,
+        ok: true,
+        result,
+      });
+    })
+    .catch((error: Error) => {
+      sendResponse({
+        type: 'EXTERNAL_API_RESPONSE',
+        requestId,
+        ok: false,
+        error: error.message,
+      });
+    });
+
+  return true; // Async response
 });
 
 // Activate the dispatcher — must be called after all handlers are registered.
