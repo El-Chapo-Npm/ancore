@@ -26,7 +26,7 @@ export interface Messages {
     response: { txId: string };
   };
   SIGN_TRANSACTION: {
-    request: { xdr: string };
+    request: { xdr: string; networkPassphrase: string };
     response: { signedXdr: string };
   };
   GET_WALLET_STATE: {

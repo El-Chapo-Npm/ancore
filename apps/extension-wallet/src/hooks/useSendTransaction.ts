@@ -22,6 +22,9 @@ import {
 import { resolveHandle as defaultResolveHandle } from '@/services/handle-resolver';
 import type { SimulationState } from '@/screens/Send/SimulationPreview';
 import { computeMaxSendable, BASE_SEND_RESERVE, DEFAULT_SEND_FEE } from '@/utils/amount';
+import { useDashboardSettingsStore } from '@/state/dashboard-settings';
+import { createProductionSendService } from '@/services/send-service';
+import { createStellarClient } from '@ancore/stellar';
 
 export type SendStep = 'form' | 'review' | 'confirm' | 'status' | 'scheduled';
 export type TxStatus = 'idle' | 'pending' | 'confirmed' | 'failed';
@@ -110,38 +113,6 @@ function isHandleInput(value: string): boolean {
   return value.trim().startsWith('@');
 }
 
-function createDefaultService(
-  schedulerClient: SchedulerClient,
-  accountAddress: string
-): SendService {
-  return {
-    estimateFee: async () => ({
-      baseFee: '0.0000100',
-      totalFee: '0.0000100',
-      network: 'testnet',
-    }),
-    authenticatePassword: async (password: string) => password === 'wallet-password',
-    signTransaction: async (tx: SendTransactionDraft) =>
-      `signed:${tx.to}:${tx.amount}:${Date.now()}`,
-    submitTransaction: async () => ({ txId: `tx_${Date.now()}` }),
-    fetchTransactionStatus: async () => 'confirmed',
-    resolveHandle: defaultResolveHandle,
-    createScheduledTransfer: async (tx, schedule) =>
-      schedulerClient.createScheduledTransfer({
-        accountAddress,
-        to: tx.to,
-        amount: tx.amount,
-        asset: 'XLM',
-        frequency: schedule.frequency,
-        startAt: toIsoStartAt(schedule.startAt),
-        endAt: schedule.endAt ? toIsoStartAt(schedule.endAt) : undefined,
-        note: tx.truncatedNote,
-        userApproved: true,
-        relayPayload: buildDefaultRelayPayload(tx.to, tx.amount),
-      }),
-  };
-}
-
 export function validateRecipientAddress(value: string): string | undefined {
   const trimmed = value.trim();
 
@@ -199,9 +170,15 @@ export function useSendTransaction(options: UseSendTransactionOptions = {}) {
     () => options.schedulerClient ?? getExtensionSchedulerClient(),
     [options.schedulerClient]
   );
+  const network = useDashboardSettingsStore((state) => state.network);
+  const environment = useDashboardSettingsStore((state) => state.environment);
+  const stellarClient = useMemo(() => createStellarClient(network), [network]);
+
   const service = useMemo(
-    () => options.service ?? createDefaultService(schedulerClient, accountAddress),
-    [accountAddress, options.service, schedulerClient]
+    () =>
+      options.service ??
+      createProductionSendService({ stellarClient, accountAddress, environment }),
+    [accountAddress, environment, options.service, stellarClient]
   );
 
   const [step, setStep] = useState<SendStep>('form');
