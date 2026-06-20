@@ -160,7 +160,7 @@ export function OnboardingFlow() {
     checkPasswordStrength,
     deployAccount,
     setMnemonicForImport,
-    reset,
+    clearError,
   } = useOnboarding();
 
   // Generate mnemonic when entering the generate step
@@ -206,11 +206,12 @@ export function OnboardingFlow() {
     }
   }, [deployAccount]);
 
+  // Retry deployment WITHOUT discarding the mnemonic/password the user already
+  // provided. Clears the error and re-runs the deploy step.
   const handleDeployRetry = React.useCallback(() => {
+    clearError();
     setDeployStatus('idle');
-    reset();
-    goToStep('welcome');
-  }, [reset, goToStep]);
+  }, [clearError]);
 
   const handleComplete = React.useCallback(() => {
     if (!account) return;
@@ -274,6 +275,8 @@ export function OnboardingFlow() {
         isLoading={isLoading}
         error={error}
         status={deployStatus}
+        txHash={account?.txHash}
+        alreadyDeployed={account?.alreadyDeployed}
         onComplete={handleComplete}
         onRetry={handleDeployRetry}
         onBack={goToPreviousStep}

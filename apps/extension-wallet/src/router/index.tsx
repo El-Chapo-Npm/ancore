@@ -21,6 +21,7 @@ import {
   useExtensionAuth,
 } from './AuthGuard';
 import { OnboardingFlow } from '../screens/Onboarding/OnboardingFlow';
+import { DeployTestScreen } from '../screens/Onboarding/DeployTestScreen';
 import { NavBar } from '../components/Navigation/NavBar';
 import { SettingsScreen } from '../screens/Settings/SettingsScreen';
 import { SendScreen as SendFlowScreen } from '../screens/Send/SendScreen';
@@ -627,6 +628,8 @@ export function ExtensionRouterContent() {
               path="/create-account"
             />
           )}
+          {/* Smart-account deploy harness (#768) — dev only, excluded from prod build */}
+          {import.meta.env.DEV && <Route element={<DeployTestScreen />} path="/deploy-test" />}
           <Route
             element={
               <PublicOnlyGuard mode="unlock">
