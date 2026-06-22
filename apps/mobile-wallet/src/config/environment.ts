@@ -12,6 +12,7 @@ export interface MobileWalletEnvironment extends NetworkConfig {
   appName: string;
   readOnlyAccountId?: string;
   readOnlyAccountAddress?: string;
+  walletConnectProjectId?: string;
 }
 
 export type MobileWalletEnvSource = Record<string, string | undefined>;
@@ -89,5 +90,6 @@ export const loadMobileWalletEnvironment = (
       source.ANCORE_MOBILE_NETWORK_PASSPHRASE?.trim() || defaultPassphraseFor(rawNetwork),
     readOnlyAccountId: source.ANCORE_MOBILE_READONLY_ACCOUNT_ID?.trim() || undefined,
     readOnlyAccountAddress: source.ANCORE_MOBILE_READONLY_ACCOUNT_ADDRESS?.trim() || undefined,
+    walletConnectProjectId: source.WALLETCONNECT_PROJECT_ID?.trim() || undefined,
   };
 };

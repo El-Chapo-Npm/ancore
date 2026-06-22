@@ -6,18 +6,18 @@
 
 ## Glossary
 
-| Term                     | Meaning                                                                          |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| **Mobile shell**         | `MobileWalletShell` + navigation — host app wiring surface                       |
-| **MobileSecureVault**    | PBKDF2 + AES-GCM vault in `src/security/mobile-secure-vault.ts`                  |
-| **Secure store adapter** | Pluggable backend for vault secrets (`storage/mobile-secure-storage-adapter.ts`) |
-| **Indexer adapter**      | `createIndexerActivityAdapter` — paginated history from Ancore indexer REST API  |
-| **Smart account**        | Soroban contract account — Ancore AA model (not classic G-address only)          |
-| **Session key**          | Contract-scoped signing key (extension has fuller UI today)                      |
-| **XDR**                  | Stellar binary serialization for transactions                                    |
-| **WalletConnect**        | _Planned_ — dApp protocol v2 (Freighter Mobile uses `@reown/walletkit`)          |
-| **Payment URI**          | SEP-7-style deep link parsing in `src/linking/paymentUri.ts`                     |
-| **Biometric lockout**    | Rate-limited biometric attempts via `biometric-lockout-manager.ts`               |
+| Term                     | Meaning                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| **Mobile shell**         | `MobileWalletShell` + navigation — host app wiring surface                          |
+| **MobileSecureVault**    | PBKDF2 + AES-GCM vault in `src/security/mobile-secure-vault.ts`                     |
+| **Secure store adapter** | Pluggable backend for vault secrets (`storage/mobile-secure-storage-adapter.ts`)    |
+| **Indexer adapter**      | `createIndexerActivityAdapter` — paginated history from Ancore indexer REST API     |
+| **Smart account**        | Soroban contract account — Ancore AA model (not classic G-address only)             |
+| **Session key**          | Contract-scoped signing key (extension has fuller UI today)                         |
+| **XDR**                  | Stellar binary serialization for transactions                                       |
+| **WalletConnect**        | dApp protocol v2 via `@reown/walletkit` — see `src/providers/WalletKitProvider.tsx` |
+| **Payment URI**          | SEP-7-style deep link parsing in `src/linking/paymentUri.ts`                        |
+| **Biometric lockout**    | Rate-limited biometric attempts via `biometric-lockout-manager.ts`                  |
 
 ## Documentation
 
@@ -63,11 +63,12 @@ corepack pnpm test
 
 See `.env.example`. Central config: `src/config/environment.ts`.
 
-| Variable    | Purpose                                                      |
-| ----------- | ------------------------------------------------------------ |
-| Indexer URL | Transaction history (pass to `createIndexerActivityAdapter`) |
-| Relayer URL | Future send/submit flows                                     |
-| Network     | mainnet / testnet / futurenet                                |
+| Variable                 | Purpose                                                      |
+| ------------------------ | ------------------------------------------------------------ |
+| Indexer URL              | Transaction history (pass to `createIndexerActivityAdapter`) |
+| Relayer URL              | Future send/submit flows                                     |
+| Network                  | mainnet / testnet / futurenet                                |
+| WALLETCONNECT_PROJECT_ID | WalletConnect Cloud project ID for dApp connections          |
 
 **Gap:** Indexer URL is often passed ad hoc to adapters — centralize like Freighter’s `config/constants.ts` when adding a host app.
 
@@ -89,8 +90,9 @@ apps/mobile-wallet/
 │   │   └── hooks/useBiometricUnlock.ts
 │   ├── storage/               # Secure store adapter interface
 │   ├── sdk/                   # Read-only mobile wallet client
-│   ├── linking/               # Payment URI parsing
-│   ├── components/            # History list, lockout banner, …
+│   ├── linking/               # Payment URI parsing + WalletConnect deep links
+│   ├── providers/             # WalletKitProvider, Stellar RPC handlers
+│   ├── components/            # History list, lockout banner, SessionApprovalSheet
 │   └── config/                # environment.ts
 ├── jest.config.cjs
 └── .env.example
@@ -101,7 +103,6 @@ apps/mobile-wallet/
 ```
 ios/ android/                  # Native host app + dual bundle IDs
 e2e/flows/                     # Maestro YAML
-src/providers/WalletKitProvider.tsx
 fastlane/                      # Store release automation
 ```
 
