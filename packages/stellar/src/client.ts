@@ -4,7 +4,7 @@
 
 import { rpc as StellarRpc, Horizon, TransactionBuilder } from '@stellar/stellar-sdk';
 import type { Transaction } from '@stellar/stellar-sdk';
-import { parseSimulationResponse, simulateUnsignedTransaction, type ParsedSimulationResult } from './simulation';
+import { simulateUnsignedTransaction, type ParsedSimulationResult } from './simulation';
 import type { Network, NetworkConfig } from '@ancore/types';
 import {
   StellarError,
