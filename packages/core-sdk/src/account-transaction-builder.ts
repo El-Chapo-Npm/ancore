@@ -32,7 +32,6 @@ import {
 import {
   toScAddress,
   toScBytesN32,
-  toScOperationsVec,
   toScPermissionsVec,
   toScU64,
   toScOption,

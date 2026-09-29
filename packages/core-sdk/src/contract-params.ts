@@ -15,18 +15,21 @@ import { Address, nativeToScVal, xdr, StrKey } from '@stellar/stellar-sdk';
 // ---------------------------------------------------------------------------
 
 /**
- * Convert a Stellar public key string (G…) to an ScVal address.
+ * Convert a Stellar address string (G… account or C… contract) to an ScVal
+ * address. Soroban's `Address` type covers both — callers like `execute()`'s
+ * `to` parameter address a target *contract* (C…), not an account, so this
+ * must not be restricted to G-only.
  *
- * @param publicKey - Stellar public key starting with 'G'
+ * @param address - Stellar account (G…) or contract (C…) address
  * @returns ScVal wrapping the address
- * @throws If the public key is not a valid Stellar address
+ * @throws If the address is not a valid Stellar G… or C… address
  */
-export function toScAddress(publicKey: string): xdr.ScVal {
-  if (!publicKey || !publicKey.startsWith('G')) {
-    throw new Error(`Invalid Stellar public key: expected a G… address, received "${publicKey}"`);
+export function toScAddress(address: string): xdr.ScVal {
+  if (!address || !(address.startsWith('G') || address.startsWith('C'))) {
+    throw new Error(`Invalid Stellar public key: expected a G… address, received "${address}"`);
   }
 
-  return xdr.ScVal.scvAddress(Address.fromString(publicKey).toScAddress());
+  return xdr.ScVal.scvAddress(Address.fromString(address).toScAddress());
 }
 
 /**
@@ -199,27 +202,18 @@ export enum CallerIdentity {
  * @param data - Optional data (BytesN<32> for SessionKey, Vec<Address> for Quorum)
  * @returns ScVal enum representation
  */
-export function toScCallerIdentity(
-  identity: CallerIdentity,
-  data?: xdr.ScVal
-): xdr.ScVal {
+export function toScCallerIdentity(identity: CallerIdentity, data?: xdr.ScVal): xdr.ScVal {
   if (identity === CallerIdentity.Owner) {
     return nativeToScVal({ tag: 'Owner', values: undefined }, { type: 'symbol' });
   }
 
   if (identity === CallerIdentity.SessionKey && data) {
-    const enumVariant = xdr.ScVal.scvVec([
-      nativeToScVal('SessionKey', { type: 'symbol' }),
-      data,
-    ]);
+    const enumVariant = xdr.ScVal.scvVec([nativeToScVal('SessionKey', { type: 'symbol' }), data]);
     return enumVariant;
   }
 
   if (identity === CallerIdentity.Quorum && data) {
-    const enumVariant = xdr.ScVal.scvVec([
-      nativeToScVal('Quorum', { type: 'symbol' }),
-      data,
-    ]);
+    const enumVariant = xdr.ScVal.scvVec([nativeToScVal('Quorum', { type: 'symbol' }), data]);
     return enumVariant;
   }
 
@@ -233,5 +227,5 @@ export function toScCallerIdentity(
  * @returns ScVal bytes
  */
 export function toScBytes(bytes: Uint8Array | Buffer): xdr.ScVal {
-  return xdr.ScVal.scvBytes(bytes);
+  return xdr.ScVal.scvBytes(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes));
 }
