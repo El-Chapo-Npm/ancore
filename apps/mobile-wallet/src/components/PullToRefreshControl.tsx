@@ -1,4 +1,6 @@
-import { type ReactNode, type TouchEvent, useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 
 type Props = {
   isRefreshing: boolean;
@@ -15,16 +17,18 @@ export const PullToRefreshControl = ({ isRefreshing, onRefresh, children }: Prop
   const isPulling = pullDistance > 0 && !isRefreshing;
   const shouldShowIndicator = isPulling || isRefreshing;
 
-  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
-    startYRef.current = event.touches[0]?.clientY ?? null;
+  const handleTouchStart = (event: GestureResponderEvent) => {
+    const nativeEvent = event.nativeEvent as any;
+    startYRef.current = nativeEvent.pageY ?? null;
   };
 
-  const handleTouchMove = (event: TouchEvent<HTMLElement>) => {
+  const handleTouchMove = (event: GestureResponderEvent) => {
     if (startYRef.current === null || isRefreshing) {
       return;
     }
 
-    const nextY = event.touches[0]?.clientY ?? startYRef.current;
+    const nativeEvent = event.nativeEvent as any;
+    const nextY = nativeEvent.pageY ?? startYRef.current;
     setPullDistance(Math.max(0, Math.min(nextY - startYRef.current, PULL_THRESHOLD_PX)));
   };
 
@@ -40,18 +44,27 @@ export const PullToRefreshControl = ({ isRefreshing, onRefresh, children }: Prop
   };
 
   return (
-    <section
-      data-testid="pull-to-refresh"
+    <View
+      testID="pull-to-refresh"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       {shouldShowIndicator ? (
-        <p aria-live="polite" role="status">
+        <Text style={styles.indicator} accessibilityLiveRegion="polite" accessibilityRole="alert">
           {isRefreshing ? 'Refreshing transactions...' : 'Release to refresh'}
-        </p>
+        </Text>
       ) : null}
       {children}
-    </section>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  indicator: {
+    padding: 12,
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#64748b',
+  },
+});
